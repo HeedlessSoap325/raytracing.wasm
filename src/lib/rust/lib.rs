@@ -140,15 +140,15 @@ impl Sphere {
     // Returns the t value of the nearest hit, or None if no intersection.
     pub fn hit(&self, ray: Ray) -> f64 {
         let oc: Vec3 = self.center - ray.origin;
-		let a: f64 = Vec3::dot(ray.direction, ray.direction);
-		let b: f64 = -2.0 * Vec3::dot(ray.direction, oc);
-		let c: f64 = Vec3::dot(oc, oc) - self.radius * self.radius;
-		let discriminant: f64 = b * b - 4.0 * a * c;
+		let a: f64 = ray.direction.length_squared();
+		let h: f64 = Vec3::dot(ray.direction, oc);
+		let c: f64 = oc.length_squared() - self.radius * self.radius;
+		let discriminant: f64 = h * h - a * c;
 
-		if (discriminant < 0.0) {
+		if discriminant < 0.0 {
 			return -1.0;
 		} else {
-			return (-b - discriminant.sqrt()) / ( 2.0 * a);
+			return (h - discriminant.sqrt()) / a;
 		}
     }
 }
