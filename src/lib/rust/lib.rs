@@ -117,12 +117,35 @@ impl Ray {
 		self.origin + self.direction * t
 	}
 
-	pub fn color(self) -> Color {
+	pub fn color(self, sphere: Sphere) -> Color {
+		if sphere.hit(self)  {
+			return Color::new(1.0, 0.0, 0.0);
+		}
+
 		let unit_direction: Vec3 = self.direction.normalize();
 		let a: f64 = 0.5 * (unit_direction.y + 1.0);
 		Color::new(1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0) * a
 	}
 }
+
+#[derive(Copy, Clone)]
+pub struct Sphere {
+    pub center: Point3,
+    pub radius: f64,
+}
+
+impl Sphere {
+    // Returns the t value of the nearest hit, or None if no intersection.
+    pub fn hit(&self, ray: Ray) -> bool {
+        let oc: Vec3 = self.center - ray.origin;
+		let a: f64 = Vec3::dot(ray.direction, ray.direction);
+		let b: f64 = -2.0 * Vec3::dot(ray.direction, oc);
+		let c: f64 = Vec3::dot(oc, oc) - self.radius * self.radius;
+		let discriminant: f64 = b * b - 4.0 * a * c;
+		discriminant >= 0.0
+    }
+}
+
 
 fn write_color(pixels: &mut Vec<u8>, color: Color) {
 	pixels.push((color.x * 255.999) as u8);
@@ -137,7 +160,7 @@ pub fn render(width: u64, height: u64) -> Vec<u8> {
 
 	let focal_length: f64 = 1.0;
     let viewport_height: f64 = 2.0;
-    let viewport_width: f64 = viewport_height * (width / height) as f64;
+    let viewport_width: f64 = viewport_height * (width as f64 / height as f64);
     let camera_center: Point3 = Point3::zero();
 
     // Calculate the vectors across the horizontal and down the vertical viewport edges.
@@ -152,6 +175,7 @@ pub fn render(width: u64, height: u64) -> Vec<u8> {
     let viewport_upper_left: Vec3 = camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc: Vec3 = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
 
+	let sphere: Sphere = Sphere { center: Point3::new(0.0, 0.0, -1.0), radius: 0.5 };
 
 	for j in 0..height {
 		for i in 0..width {
@@ -159,7 +183,7 @@ pub fn render(width: u64, height: u64) -> Vec<u8> {
             let ray_direction: Vec3 = pixel_center - camera_center;
             let ray: Ray = Ray::new(camera_center, ray_direction);
 
-			write_color(&mut pixels, ray.color());
+			write_color(&mut pixels, ray.color(sphere));
 		}
 	}
 
