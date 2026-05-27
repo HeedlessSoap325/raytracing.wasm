@@ -118,8 +118,10 @@ impl Ray {
 	}
 
 	pub fn color(self, sphere: Sphere) -> Color {
-		if sphere.hit(self)  {
-			return Color::new(1.0, 0.0, 0.0);
+		let t = sphere.hit(self);
+		if t > 0.0 {
+			let n: Vec3 = (self.at(t) - Vec3::new(0.0, 0.0, -1.0)).normalize();
+			return Color::new(n.x + 1.0, n.y + 1.0, n.z + 1.0) * 0.5;
 		}
 
 		let unit_direction: Vec3 = self.direction.normalize();
@@ -136,13 +138,18 @@ pub struct Sphere {
 
 impl Sphere {
     // Returns the t value of the nearest hit, or None if no intersection.
-    pub fn hit(&self, ray: Ray) -> bool {
+    pub fn hit(&self, ray: Ray) -> f64 {
         let oc: Vec3 = self.center - ray.origin;
 		let a: f64 = Vec3::dot(ray.direction, ray.direction);
 		let b: f64 = -2.0 * Vec3::dot(ray.direction, oc);
 		let c: f64 = Vec3::dot(oc, oc) - self.radius * self.radius;
 		let discriminant: f64 = b * b - 4.0 * a * c;
-		discriminant >= 0.0
+
+		if (discriminant < 0.0) {
+			return -1.0;
+		} else {
+			return (-b - discriminant.sqrt()) / ( 2.0 * a);
+		}
     }
 }
 
