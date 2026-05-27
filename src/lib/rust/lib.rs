@@ -101,3 +101,21 @@ impl Neg for Vec3 {
         Self::new(-self.x, -self.y, -self.z)
     }
 }
+
+#[wasm_bindgen]
+pub fn render(width: u64, height: u64) -> Vec<u8> {
+	let mut pixels: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
+
+	for j in 0..height {
+		for i in 0..width {
+			let r = i as f64 / (width - 1) as f64;
+            let g = j as f64 / (height - 1) as f64;
+            pixels.push((r * 254.0) as u8);
+            pixels.push((g * 254.0) as u8);
+            pixels.push(0u8);
+            pixels.push(255u8);
+		}
+	}
+
+	pixels
+}
