@@ -102,6 +102,22 @@ impl Neg for Vec3 {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+pub struct Ray {
+	pub origin: Point3,
+	pub direction: Vec3,
+}
+
+impl Ray {
+	pub fn new(origin: Point3, direction: Vec3) -> Self {
+		Self { origin, direction }
+	}
+
+	pub fn at(self, t: f64) -> Point3 {
+		self.origin + self.direction * t
+	}
+}
+
 #[wasm_bindgen]
 pub fn render(width: u64, height: u64) -> Vec<u8> {
 	let mut pixels: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
