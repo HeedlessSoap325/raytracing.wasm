@@ -116,20 +116,50 @@ impl Ray {
 	pub fn at(self, t: f64) -> Point3 {
 		self.origin + self.direction * t
 	}
+
+	pub fn color(self) -> Color {
+		let unit_direction: Vec3 = self.direction.normalize();
+		let a: f64 = 0.5 * (unit_direction.y + 1.0);
+		Color::new(1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0) * a
+	}
+}
+
+fn write_color(pixels: &mut Vec<u8>, color: Color) {
+	pixels.push((color.x * 255.999) as u8);
+    pixels.push((color.y * 255.999) as u8);
+    pixels.push((color.z * 255.999) as u8);
+    pixels.push(255u8);
 }
 
 #[wasm_bindgen]
 pub fn render(width: u64, height: u64) -> Vec<u8> {
 	let mut pixels: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
 
+	let focal_length: f64 = 1.0;
+    let viewport_height: f64 = 2.0;
+    let viewport_width: f64 = viewport_height * (width / height) as f64;
+    let camera_center: Point3 = Point3::zero();
+
+    // Calculate the vectors across the horizontal and down the vertical viewport edges.
+    let viewport_u: Vec3 = Vec3::new(viewport_width, 0.0, 0.0);
+    let viewport_v: Vec3 = Vec3::new(0.0, -viewport_height, 0.0);
+
+    // Calculate the horizontal and vertical delta vectors from pixel to pixel.
+    let pixel_delta_u = viewport_u / (width as f64);
+    let pixel_delta_v = viewport_v / (height as f64);
+
+    // Calculate the location of the upper left pixel.
+    let viewport_upper_left: Vec3 = camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+    let pixel00_loc: Vec3 = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
+
+
 	for j in 0..height {
 		for i in 0..width {
-			let r = i as f64 / (width - 1) as f64;
-            let g = j as f64 / (height - 1) as f64;
-            pixels.push((r * 254.0) as u8);
-            pixels.push((g * 254.0) as u8);
-            pixels.push(0u8);
-            pixels.push(255u8);
+			let pixel_center: Point3 = pixel00_loc + (pixel_delta_u * i as f64) + (pixel_delta_v * j as f64);
+            let ray_direction: Vec3 = pixel_center - camera_center;
+            let ray: Ray = Ray::new(camera_center, ray_direction);
+
+			write_color(&mut pixels, ray.color());
 		}
 	}
 
