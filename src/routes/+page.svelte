@@ -9,12 +9,13 @@
 		const ctx = canvas!.getContext("2d");
 		const width  = 640;
 		const height = 360;
+		const samples_per_pixel = 50;
 
 		canvas!.width  = width;
 		canvas!.height = height;
 
 		const t0 = performance.now();
-		const pixelData = render(BigInt(width), BigInt(height));
+		const pixelData = render(BigInt(width), BigInt(height), BigInt(samples_per_pixel));
 		const t1 = performance.now();
 
 		const imageData = new ImageData(	

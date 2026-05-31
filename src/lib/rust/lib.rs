@@ -261,22 +261,30 @@ impl Interval {
 	pub fn surrounds(&self, x: f64) -> bool {
 		(self.min < x) && (x < self.max)
 	}
+
+	pub fn clamp(&self, x: f64) -> f64 {
+		if x < self.min { return self.min };
+		if x > self.max { return self.max };
+		x
+	}
 }
 
 #[derive(Default)]
 pub struct Camera {
 	pub image_width: u64,
 	pub image_height: u64,
+	pub samples_per_pixel: u64,
 	center: Point3,
 	pixel00_loc: Point3,
 	pixel_delta_u: Point3,
 	pixel_delta_v: Point3,
 	pixels: Vec<u8>,
+	pixel_samples_scale: f64,
 }
 
 impl Camera {
-	pub fn new(image_width: u64, image_height: u64) -> Self {
-		let mut cam: Self = Self { image_width, image_height, ..Default::default() };
+	pub fn new(image_width: u64, image_height: u64, samples_per_pixel: u64) -> Self {
+		let mut cam: Self = Self { image_width, image_height, samples_per_pixel, ..Default::default() };
 		cam.initialize();
 		cam
 	}
@@ -284,11 +292,13 @@ impl Camera {
 	pub fn render(&mut self, world: &World) -> Vec<u8> {
 		for j in 0..self.image_height {
 			for i in 0..self.image_width {
-				let pixel_center: Point3 = self.pixel00_loc + (self.pixel_delta_u * i as f64) + (self.pixel_delta_v * j as f64);
-				let ray_direction: Vec3 = pixel_center - self.center;
-				let ray: Ray = Ray::new(self.center, ray_direction);
+				let mut pixel_color = Color::zero();
+				for _ in 0..self.samples_per_pixel {
+					let ray: Ray = self.get_ray(i, j);
+					pixel_color = pixel_color + ray.color(world);
+				}
 	
-				self.write_color(ray.color(&world));
+				self.write_color(pixel_color * self.pixel_samples_scale);
 			}
 		}
 	
@@ -299,6 +309,8 @@ impl Camera {
 		self.pixels = Vec::with_capacity((self.image_width * self.image_height * 4) as usize);
 
 		self.center = Point3::zero();
+
+		self.pixel_samples_scale = 1.0 / (self.samples_per_pixel as f64);
 
 		let focal_length: f64 = 1.0;
 		let viewport_height: f64 = 2.0;
@@ -317,10 +329,27 @@ impl Camera {
 		self.pixel00_loc = viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
 	}
 
+	fn get_ray(&self, i: u64, j: u64) -> Ray {
+		let offset: Vec3 = self.sample_square();
+		let pixel_sample: Vec3 = self.pixel00_loc 
+			+ (self.pixel_delta_u * (i as f64 + offset.x)) 
+			+ (self.pixel_delta_v * (j as f64 + offset.y));
+
+		let ray_origin: Point3 = self.center;
+		let ray_direction: Vec3 = pixel_sample - ray_origin;
+
+		Ray::new(ray_origin, ray_direction)
+	}
+
+	fn sample_square(&self) -> Vec3 {
+		Vec3::new(rand_f64() - 0.5, rand_f64() - 0.5, 0.0)
+	}
+
 	fn write_color(&mut self, color: Color) {
-		self.pixels.push((color.x * 255.999) as u8);
-		self.pixels.push((color.y * 255.999) as u8);
-		self.pixels.push((color.z * 255.999) as u8);
+		let intensity: Interval = Interval::new(0.000, 0.999);
+		self.pixels.push((256.0 * intensity.clamp(color.x)) as u8);
+		self.pixels.push((256.0 * intensity.clamp(color.y)) as u8);
+		self.pixels.push((256.0 * intensity.clamp(color.z)) as u8);
 		self.pixels.push(255u8);
 	}
 }
@@ -329,8 +358,28 @@ fn degrees_to_radians(degrees: f64) -> f64 {
     degrees * 3.1415926535897932385 / 180.0
 }
 
+use std::cell::Cell;
+thread_local! {
+    static RNG: Cell<u32> = Cell::new(12345);
+}
+
+fn rand_f64() -> f64 {
+    RNG.with(|r| {
+        let mut x = r.get();
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        r.set(x);
+        (x as f64) / (u32::MAX as f64)
+    })
+}
+
+fn rand_range(min: f64, max: f64) -> f64 {
+    min + (max - min) * rand_f64()
+}
+
 #[wasm_bindgen]
-pub fn render(width: u64, height: u64) -> Vec<u8> {
+pub fn render(width: u64, height: u64, samples_per_pixel: u64) -> Vec<u8> {
 	let mut world: World = World::new();
 	world.add(Box::new(
 		Sphere {
@@ -345,6 +394,6 @@ pub fn render(width: u64, height: u64) -> Vec<u8> {
 		}
 	));
 
-	let mut camera: Camera = Camera::new(width, height);
+	let mut camera: Camera = Camera::new(width, height, samples_per_pixel);
 	camera.render(&world)
 }
