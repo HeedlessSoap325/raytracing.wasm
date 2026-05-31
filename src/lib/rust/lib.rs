@@ -117,21 +117,8 @@ impl Ray {
 		self.origin + self.direction * t
 	}
 
-	pub fn color(self, world: &[Sphere]) -> Color {
-		let mut temp_rec: Option<HitRecord> = None;
-		let mut closest_so_far = f64::INFINITY;
-		let mut hit_anything: bool = false;
-
-		for object in world {
-			if let Some(hit) = object.hit(self, 0.0, closest_so_far) {
-				hit_anything   = true;
-				closest_so_far = hit.t;
-				temp_rec       = Some(hit);
-			}
-		}
-		
-
-		if hit_anything && let Some(hit) = temp_rec {
+	pub fn color(self, world: &World) -> Color {
+		if let Some(hit) = world.hit(self, 0.0, f64::INFINITY) {
 			return (hit.normal + Color::new(1.0, 1.0, 1.0)) * 0.5;
 		}
 
@@ -139,49 +126,6 @@ impl Ray {
 		let a: f64 = 0.5 * (unit_direction.y + 1.0);
 		Color::new(1.0, 1.0, 1.0) * (1.0 - a) + Color::new(0.5, 0.7, 1.0) * a
 	}
-}
-
-#[derive(Copy, Clone)]
-pub struct Sphere {
-    pub center: Point3,
-    pub radius: f64,
-}
-
-impl Sphere {
-    // Returns the t value of the nearest hit, or None if no intersection.
-    pub fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord> {
-        let oc: Vec3 = self.center - ray.origin;
-		let a: f64 = ray.direction.length_squared();
-		let h: f64 = Vec3::dot(ray.direction, oc);
-		let c: f64 = oc.length_squared() - self.radius * self.radius;
-
-		let discriminant: f64 = h * h - a * c;
-
-		if discriminant < 0.0 {
-			return None;
-		}
-
-		let sqrtd: f64 = discriminant.sqrt();
-		let mut root: f64 = (h - sqrtd) / a;
-		if (root <= ray_tmin) || (ray_tmax <= root) {
-			root = (h + sqrtd) / a;
-			if (root <= ray_tmin) || (ray_tmax <= root) {
-				return None;
-			}
-		}
-
-		let mut hit_record = HitRecord {
-			t: root,
-			point: ray.at(root),
-			normal: (ray.at(root) - self.center) / self.radius,
-			front_face: false,
-		};
-
-		let outward_normal: Vec3 = (hit_record.point - self.center) / self.radius;
-		hit_record.set_face_normal(ray, outward_normal);
-
-		Some(hit_record)
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -202,6 +146,86 @@ impl HitRecord {
 	}
 }
 
+trait Hittable {
+	fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord>;
+}
+
+#[derive(Copy, Clone)]
+pub struct Sphere {
+    pub center: Point3,
+    pub radius: f64,
+}
+
+impl Hittable for Sphere {
+	fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord> {
+        let oc: Vec3 = self.center - ray.origin;
+		let a: f64 = ray.direction.length_squared();
+		let h: f64 = Vec3::dot(ray.direction, oc);
+		let c: f64 = oc.length_squared() - self.radius * self.radius;
+
+		let discriminant: f64 = h * h - a * c;
+
+		if discriminant < 0.0 {
+			return None;
+		}
+
+		let sqrtd: f64 = discriminant.sqrt();
+		let mut root: f64 = (h - sqrtd) / a;
+		if (root <= ray_tmin) || (ray_tmax <= root) {
+			root = (h + sqrtd) / a;
+			if (root <= ray_tmin) || (ray_tmax <= root) {
+				return None;
+			}
+		}
+
+		let mut hit_record: HitRecord = HitRecord {
+			t: root,
+			point: ray.at(root),
+			normal: (ray.at(root) - self.center) / self.radius,
+			front_face: false,
+		};
+
+		let outward_normal: Vec3 = (hit_record.point - self.center) / self.radius;
+		hit_record.set_face_normal(ray, outward_normal);
+
+		Some(hit_record)
+    }
+}
+
+struct World {
+	objects: Vec<Box<dyn Hittable>>,
+}
+
+impl World {
+	pub fn new() -> Self {
+		Self { objects: Vec::new() }
+	}
+
+	pub fn clear(&mut self) {
+		self.objects.clear();
+	}
+
+	pub fn add(&mut self, object: Box<dyn Hittable>) {
+		self.objects.push(object);
+	}
+}
+
+impl Hittable for World {
+	fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord> {
+		let mut rec: Option<HitRecord> = None;
+		let mut closest_so_far: f64 = ray_tmax;
+
+		for object in &self.objects {
+			if let Some(hit) = object.hit(ray, ray_tmin, closest_so_far) {
+				closest_so_far = hit.t;
+				rec = Some(hit);
+			}
+		}
+
+		rec
+	}
+}
+
 fn degrees_to_radians(degrees: f64) -> f64 {
     degrees * 3.1415926535897932385 / 180.0
 }
@@ -217,16 +241,19 @@ fn write_color(pixels: &mut Vec<u8>, color: Color) {
 pub fn render(width: u64, height: u64) -> Vec<u8> {
 	let mut pixels: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
 
-	let world: Vec<Sphere> = vec![
+	let mut world: World = World::new();
+	world.add(Box::new(
 		Sphere {
 			center: Point3::new(0.0, 0.0, -1.0),
 			radius: 0.5,
-		},
+		}
+	));
+	world.add(Box::new(
 		Sphere {
 			center: Point3::new(0.0, -100.5, -1.0),
 			radius: 100.0,
-		},
-	];
+		}
+	));
 
 	let focal_length: f64 = 1.0;
     let viewport_height: f64 = 2.0;
