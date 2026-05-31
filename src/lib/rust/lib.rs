@@ -117,11 +117,22 @@ impl Ray {
 		self.origin + self.direction * t
 	}
 
-	pub fn color(self, sphere: Sphere) -> Color {
-		let t = sphere.hit(self);
-		if t > 0.0 {
-			let n: Vec3 = (self.at(t) - Vec3::new(0.0, 0.0, -1.0)).normalize();
-			return Color::new(n.x + 1.0, n.y + 1.0, n.z + 1.0) * 0.5;
+	pub fn color(self, world: &[Sphere]) -> Color {
+		let mut temp_rec: Option<HitRecord> = None;
+		let mut closest_so_far = f64::INFINITY;
+		let mut hit_anything: bool = false;
+
+		for object in world {
+			if let Some(hit) = object.hit(self, 0.0, closest_so_far) {
+				hit_anything   = true;
+				closest_so_far = hit.t;
+				temp_rec       = Some(hit);
+			}
+		}
+		
+
+		if hit_anything && let Some(hit) = temp_rec {
+			return (hit.normal + Color::new(1.0, 1.0, 1.0)) * 0.5;
 		}
 
 		let unit_direction: Vec3 = self.direction.normalize();
@@ -138,21 +149,62 @@ pub struct Sphere {
 
 impl Sphere {
     // Returns the t value of the nearest hit, or None if no intersection.
-    pub fn hit(&self, ray: Ray) -> f64 {
+    pub fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord> {
         let oc: Vec3 = self.center - ray.origin;
 		let a: f64 = ray.direction.length_squared();
 		let h: f64 = Vec3::dot(ray.direction, oc);
 		let c: f64 = oc.length_squared() - self.radius * self.radius;
+
 		let discriminant: f64 = h * h - a * c;
 
 		if discriminant < 0.0 {
-			return -1.0;
-		} else {
-			return (h - discriminant.sqrt()) / a;
+			return None;
 		}
+
+		let sqrtd: f64 = discriminant.sqrt();
+		let mut root: f64 = (h - sqrtd) / a;
+		if (root <= ray_tmin) || (ray_tmax <= root) {
+			root = (h + sqrtd) / a;
+			if (root <= ray_tmin) || (ray_tmax <= root) {
+				return None;
+			}
+		}
+
+		let mut hit_record = HitRecord {
+			t: root,
+			point: ray.at(root),
+			normal: (ray.at(root) - self.center) / self.radius,
+			front_face: false,
+		};
+
+		let outward_normal: Vec3 = (hit_record.point - self.center) / self.radius;
+		hit_record.set_face_normal(ray, outward_normal);
+
+		Some(hit_record)
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct HitRecord {
+    pub point: Point3,
+    pub normal: Vec3,
+    pub t: f64,
+	pub front_face: bool,
+}
+
+impl HitRecord {
+	pub fn set_face_normal(&mut self, ray: Ray, outward_normal: Vec3) {
+		// Sets the hit record normal vector.
+		// NOTE: the parameter `outward_normal` is asumend to have unit length
+
+		self.front_face = Vec3::dot(ray.direction, outward_normal) < 0.0;
+		self.normal = if self.front_face { outward_normal } else { -outward_normal };
+	}
+}
+
+fn degrees_to_radians(degrees: f64) -> f64 {
+    degrees * 3.1415926535897932385 / 180.0
+}
 
 fn write_color(pixels: &mut Vec<u8>, color: Color) {
 	pixels.push((color.x * 255.999) as u8);
@@ -164,6 +216,17 @@ fn write_color(pixels: &mut Vec<u8>, color: Color) {
 #[wasm_bindgen]
 pub fn render(width: u64, height: u64) -> Vec<u8> {
 	let mut pixels: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
+
+	let world: Vec<Sphere> = vec![
+		Sphere {
+			center: Point3::new(0.0, 0.0, -1.0),
+			radius: 0.5,
+		},
+		Sphere {
+			center: Point3::new(0.0, -100.5, -1.0),
+			radius: 100.0,
+		},
+	];
 
 	let focal_length: f64 = 1.0;
     let viewport_height: f64 = 2.0;
@@ -182,15 +245,13 @@ pub fn render(width: u64, height: u64) -> Vec<u8> {
     let viewport_upper_left: Vec3 = camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
     let pixel00_loc: Vec3 = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
 
-	let sphere: Sphere = Sphere { center: Point3::new(0.0, 0.0, -1.0), radius: 0.5 };
-
 	for j in 0..height {
 		for i in 0..width {
 			let pixel_center: Point3 = pixel00_loc + (pixel_delta_u * i as f64) + (pixel_delta_v * j as f64);
             let ray_direction: Vec3 = pixel_center - camera_center;
             let ray: Ray = Ray::new(camera_center, ray_direction);
 
-			write_color(&mut pixels, ray.color(sphere));
+			write_color(&mut pixels, ray.color(&world));
 		}
 	}
 
