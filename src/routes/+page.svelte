@@ -3,6 +3,7 @@
     import { onMount } from "svelte";
 
 	let canvas: HTMLCanvasElement | undefined = $state(undefined);
+	let ms = $state(0);
 
 	async function doRender() {
 		const ctx = canvas!.getContext("2d");
@@ -12,8 +13,9 @@
 		canvas!.width  = width;
 		canvas!.height = height;
 
+		const t0 = performance.now();
 		const pixelData = render(BigInt(width), BigInt(height));
-		console.log(pixelData)
+		const t1 = performance.now();
 
 		const imageData = new ImageData(	
 			new Uint8ClampedArray<ArrayBuffer>(pixelData.buffer as ArrayBuffer, pixelData.byteOffset, pixelData.byteLength),
@@ -22,6 +24,7 @@
 		);
 
 		ctx!.putImageData(imageData, 0, 0);
+		ms = t1 - t0;
 	}
 
 	onMount(async () => {
@@ -32,4 +35,4 @@
 
 <canvas bind:this={canvas}></canvas>
 
-<button onclick={doRender}>Render!</button>
+<button onclick={doRender}>Render! prev: {ms}</button>
