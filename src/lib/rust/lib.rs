@@ -118,7 +118,7 @@ impl Ray {
 	}
 
 	pub fn color(self, world: &World) -> Color {
-		if let Some(hit) = world.hit(self, 0.0, f64::INFINITY) {
+		if let Some(hit) = world.hit(self, Interval::new(0.0, f64::INFINITY)) {
 			return (hit.normal + Color::new(1.0, 1.0, 1.0)) * 0.5;
 		}
 
@@ -146,8 +146,8 @@ impl HitRecord {
 	}
 }
 
-trait Hittable {
-	fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord>;
+pub trait Hittable {
+	fn hit(&self, ray: Ray, ray_t: Interval) -> Option<HitRecord>;
 }
 
 #[derive(Copy, Clone)]
@@ -157,7 +157,7 @@ pub struct Sphere {
 }
 
 impl Hittable for Sphere {
-	fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord> {
+	fn hit(&self, ray: Ray, ray_t: Interval) -> Option<HitRecord> {
         let oc: Vec3 = self.center - ray.origin;
 		let a: f64 = ray.direction.length_squared();
 		let h: f64 = Vec3::dot(ray.direction, oc);
@@ -171,9 +171,9 @@ impl Hittable for Sphere {
 
 		let sqrtd: f64 = discriminant.sqrt();
 		let mut root: f64 = (h - sqrtd) / a;
-		if (root <= ray_tmin) || (ray_tmax <= root) {
+		if !ray_t.surrounds(root) {
 			root = (h + sqrtd) / a;
-			if (root <= ray_tmin) || (ray_tmax <= root) {
+			if !ray_t.surrounds(root) {
 				return None;
 			}
 		}
@@ -192,8 +192,8 @@ impl Hittable for Sphere {
     }
 }
 
-struct World {
-	objects: Vec<Box<dyn Hittable>>,
+pub struct World {
+	pub objects: Vec<Box<dyn Hittable>>,
 }
 
 impl World {
@@ -211,18 +211,49 @@ impl World {
 }
 
 impl Hittable for World {
-	fn hit(&self, ray: Ray, ray_tmin: f64, ray_tmax: f64) -> Option<HitRecord> {
+	fn hit(&self, ray: Ray, ray_t: Interval) -> Option<HitRecord> {
 		let mut rec: Option<HitRecord> = None;
-		let mut closest_so_far: f64 = ray_tmax;
+		let mut closest_so_far: f64 = ray_t.max;
 
 		for object in &self.objects {
-			if let Some(hit) = object.hit(ray, ray_tmin, closest_so_far) {
+			if let Some(hit) = object.hit(ray, Interval::new(ray_t.min, closest_so_far)) {
 				closest_so_far = hit.t;
 				rec = Some(hit);
 			}
 		}
 
 		rec
+	}
+}
+
+pub struct Interval {
+	pub min: f64,
+	pub max: f64,
+}
+
+impl Interval {
+	pub fn empty() -> Self {
+		Self { min: f64::INFINITY, max: -f64::INFINITY }
+	}
+
+	pub fn universe() -> Self {
+		Self {min: -f64::INFINITY, max: f64::INFINITY }
+	}
+
+	pub fn new(min: f64, max: f64) -> Self {
+		Self { min, max }
+	}
+
+	pub fn size(&self) -> f64 {
+		self.max - self.min
+	}
+
+	pub fn contains(&self, x: f64) -> bool {
+		(self.min <= x) && (x <= self.max)
+	}
+
+	pub fn surrounds(&self, x: f64) -> bool {
+		(self.min < x) && (x < self.max)
 	}
 }
 
