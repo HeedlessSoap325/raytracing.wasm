@@ -102,6 +102,12 @@ impl Neg for Vec3 {
     }
 }
 
+impl Default for Vec3 {
+	fn default() -> Self {
+		Self::zero()
+	}
+}
+
 #[derive(Debug, Copy, Clone)]
 pub struct Ray {
 	pub origin: Point3,
@@ -257,21 +263,74 @@ impl Interval {
 	}
 }
 
+#[derive(Default)]
+pub struct Camera {
+	pub image_width: u64,
+	pub image_height: u64,
+	center: Point3,
+	pixel00_loc: Point3,
+	pixel_delta_u: Point3,
+	pixel_delta_v: Point3,
+	pixels: Vec<u8>,
+}
+
+impl Camera {
+	pub fn new(image_width: u64, image_height: u64) -> Self {
+		let mut cam: Self = Self { image_width, image_height, ..Default::default() };
+		cam.initialize();
+		cam
+	}
+
+	pub fn render(&mut self, world: &World) -> Vec<u8> {
+		for j in 0..self.image_height {
+			for i in 0..self.image_width {
+				let pixel_center: Point3 = self.pixel00_loc + (self.pixel_delta_u * i as f64) + (self.pixel_delta_v * j as f64);
+				let ray_direction: Vec3 = pixel_center - self.center;
+				let ray: Ray = Ray::new(self.center, ray_direction);
+	
+				self.write_color(ray.color(&world));
+			}
+		}
+	
+		std::mem::take(&mut self.pixels)
+	}
+
+	fn initialize(&mut self) {
+		self.pixels = Vec::with_capacity((self.image_width * self.image_height * 4) as usize);
+
+		self.center = Point3::zero();
+
+		let focal_length: f64 = 1.0;
+		let viewport_height: f64 = 2.0;
+		let viewport_width: f64 = viewport_height * (self.image_width as f64 / self.image_height as f64);
+
+		// Calculate the vectors across the horizontal and down the vertical viewport edges.
+		let viewport_u: Vec3 = Vec3::new(viewport_width, 0.0, 0.0);
+		let viewport_v: Vec3 = Vec3::new(0.0, -viewport_height, 0.0);
+
+		// Calculate the horizontal and vertical delta vectors from pixel to pixel.
+		self.pixel_delta_u = viewport_u / (self.image_width as f64);
+		self.pixel_delta_v = viewport_v / (self.image_height as f64);
+
+		// Calculate the location of the upper left pixel.
+		let viewport_upper_left: Vec3 = self.center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
+		self.pixel00_loc = viewport_upper_left + (self.pixel_delta_u + self.pixel_delta_v) * 0.5;
+	}
+
+	fn write_color(&mut self, color: Color) {
+		self.pixels.push((color.x * 255.999) as u8);
+		self.pixels.push((color.y * 255.999) as u8);
+		self.pixels.push((color.z * 255.999) as u8);
+		self.pixels.push(255u8);
+	}
+}
+
 fn degrees_to_radians(degrees: f64) -> f64 {
     degrees * 3.1415926535897932385 / 180.0
 }
 
-fn write_color(pixels: &mut Vec<u8>, color: Color) {
-	pixels.push((color.x * 255.999) as u8);
-    pixels.push((color.y * 255.999) as u8);
-    pixels.push((color.z * 255.999) as u8);
-    pixels.push(255u8);
-}
-
 #[wasm_bindgen]
 pub fn render(width: u64, height: u64) -> Vec<u8> {
-	let mut pixels: Vec<u8> = Vec::with_capacity((width * height * 4) as usize);
-
 	let mut world: World = World::new();
 	world.add(Box::new(
 		Sphere {
@@ -286,32 +345,6 @@ pub fn render(width: u64, height: u64) -> Vec<u8> {
 		}
 	));
 
-	let focal_length: f64 = 1.0;
-    let viewport_height: f64 = 2.0;
-    let viewport_width: f64 = viewport_height * (width as f64 / height as f64);
-    let camera_center: Point3 = Point3::zero();
-
-    // Calculate the vectors across the horizontal and down the vertical viewport edges.
-    let viewport_u: Vec3 = Vec3::new(viewport_width, 0.0, 0.0);
-    let viewport_v: Vec3 = Vec3::new(0.0, -viewport_height, 0.0);
-
-    // Calculate the horizontal and vertical delta vectors from pixel to pixel.
-    let pixel_delta_u = viewport_u / (width as f64);
-    let pixel_delta_v = viewport_v / (height as f64);
-
-    // Calculate the location of the upper left pixel.
-    let viewport_upper_left: Vec3 = camera_center - Vec3::new(0.0, 0.0, focal_length) - viewport_u / 2.0 - viewport_v / 2.0;
-    let pixel00_loc: Vec3 = viewport_upper_left + (pixel_delta_u + pixel_delta_v) * 0.5;
-
-	for j in 0..height {
-		for i in 0..width {
-			let pixel_center: Point3 = pixel00_loc + (pixel_delta_u * i as f64) + (pixel_delta_v * j as f64);
-            let ray_direction: Vec3 = pixel_center - camera_center;
-            let ray: Ray = Ray::new(camera_center, ray_direction);
-
-			write_color(&mut pixels, ray.color(&world));
-		}
-	}
-
-	pixels
+	let mut camera: Camera = Camera::new(width, height);
+	camera.render(&world)
 }
