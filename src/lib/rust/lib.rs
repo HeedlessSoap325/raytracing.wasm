@@ -42,6 +42,33 @@ impl Vec3 {
 			self.x * other.y - self.y * other.x
 		)
 	}
+
+	pub fn random() -> Self {
+		Self::new(rand_f64(), rand_f64(), rand_f64())
+	}
+
+	pub fn random_range(min: f64, max: f64) -> Self {
+		Self::new(rand_range(min, max), rand_range(min, max), rand_range(min, max))
+	}
+
+	fn random_unit() -> Self {
+		loop {
+			let vec: Self = Self::random_range(-1.0, 1.0);
+			let lensq: f64 = vec.length_squared();
+			if (1e-160 < lensq) && (lensq <= 1.0) {
+				return vec / lensq.sqrt();
+			}
+		}
+	}
+
+	pub fn random_on_hemisphere(&self) -> Self {
+		let on_unit_sphere: Self = Self::random_unit();
+		if Self::dot(on_unit_sphere, *self) > 0.0 {
+			return on_unit_sphere;
+		} else {
+			return -on_unit_sphere;
+		}
+	}
 }
 
 use std::ops::{Add, Sub, Mul, Div, Neg};
@@ -125,7 +152,9 @@ impl Ray {
 
 	pub fn color(self, world: &World) -> Color {
 		if let Some(hit) = world.hit(self, Interval::new(0.0, f64::INFINITY)) {
-			return (hit.normal + Color::new(1.0, 1.0, 1.0)) * 0.5;
+			let direction: Vec3 = hit.normal.random_on_hemisphere();
+			let ray: Ray = Ray::new(hit.point, direction);
+			return ray.color(world) * 0.5;
 		}
 
 		let unit_direction: Vec3 = self.direction.normalize();
