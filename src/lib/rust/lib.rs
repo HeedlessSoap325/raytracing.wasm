@@ -312,20 +312,23 @@ impl Material for Lambertian {
 
 pub struct Metal {
 	albedo: Color,
+	fuzz: f64,
 }
 
 impl Metal {
-	pub fn new(albedo: Color) -> Self {
-		Self { albedo }
+	pub fn new(albedo: Color, fuzz: f64) -> Self {
+		Self { albedo, fuzz: if fuzz < 1.0 { fuzz } else { 1.0 } }
 	}
 }
 
 impl Material for Metal {
 	fn scatter(&self, ray_in: Ray, rec: HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
-		let reflected: Vec3 = Vec3::reflect(ray_in.direction, rec.normal);
+		let mut reflected: Vec3 = Vec3::reflect(ray_in.direction, rec.normal);
+		reflected = reflected.normalize() + (Vec3::random_unit() * self.fuzz);
 		*scattered = Ray::new(rec.point, reflected);
 		*attenuation = self.albedo;
-		true
+		
+		scattered.direction.dot(rec.normal) > 0.0
 	}
 }
 
@@ -490,8 +493,8 @@ fn linear_to_gamma(linear_component: f64) -> f64 {
 pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64) -> Vec<u8> {
 	let material_ground: Lambertian = Lambertian::new(Color::new(0.8, 0.8, 0.0));
     let material_center: Lambertian = Lambertian::new(Color::new(0.1, 0.2, 0.5));
-    let material_left: Metal    	= Metal::new(Color::new(0.8, 0.8, 0.8));
-    let material_right: Metal 		= Metal::new(Color::new(0.8, 0.6, 0.2));
+    let material_left: Metal    	= Metal::new(Color::new(0.8, 0.8, 0.8), 0.3);
+    let material_right: Metal 		= Metal::new(Color::new(0.8, 0.6, 0.2), 1.0);
 
 	let mut world: World = World::new();
 	world.add(Box::new(
