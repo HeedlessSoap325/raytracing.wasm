@@ -155,7 +155,7 @@ impl Ray {
 			return Color::zero();
 		}
 
-		if let Some(hit) = world.hit(self, Interval::new(0.0, f64::INFINITY)) {
+		if let Some(hit) = world.hit(self, Interval::new(0.001, f64::INFINITY)) {
 			let direction: Vec3 = hit.normal.random_on_hemisphere();
 			let ray: Ray = Ray::new(hit.point, direction);
 			return ray.color(world, depth - 1) * 0.5;
