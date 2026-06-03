@@ -79,6 +79,13 @@ impl Vec3 {
 	pub fn reflect(v: Vec3, n: Vec3) -> Self {
 		v - n * v.dot(n) * 2.0
 	}
+
+	pub fn refract(uv: Vec3, n: Vec3, etai_overt_etat: f64) -> Self {
+		let cos_theta: f64 = f64::min(Self::dot(-uv, n), 1.0);
+		let r_out_perp: Vec3 = (uv + n * cos_theta) * etai_overt_etat;
+		let r_out_parallel: Vec3 = n * -(1.0 - r_out_perp.length_squared()).abs().sqrt();
+		r_out_perp + r_out_parallel
+	}
 }
 
 use std::ops::{Add, Sub, Mul, Div, Neg};
@@ -332,6 +339,29 @@ impl Material for Metal {
 	}
 }
 
+pub struct Dielectric {
+	pub refraction_index: f64,
+}
+
+impl Dielectric {
+	pub fn new(refraction_index: f64) -> Self {
+		Self { refraction_index }
+	}
+}
+
+impl Material for Dielectric {
+	fn scatter(&self, ray_in: Ray, rec: HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
+		*attenuation = Color::new(1.0, 1.0, 1.0);
+		let ri: f64 = if rec.front_face { 1.0 / self.refraction_index } else { self.refraction_index };
+
+		let unit_dir: Vec3 = ray_in.direction.normalize();
+		let refracted: Vec3 = Vec3::refract(unit_dir, rec.normal, ri);
+
+		*scattered = Ray::new(rec.point, refracted);
+		true
+	}
+}
+
 pub struct Interval {
 	pub min: f64,
 	pub max: f64,
@@ -493,7 +523,7 @@ fn linear_to_gamma(linear_component: f64) -> f64 {
 pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64) -> Vec<u8> {
 	let material_ground: Lambertian = Lambertian::new(Color::new(0.8, 0.8, 0.0));
     let material_center: Lambertian = Lambertian::new(Color::new(0.1, 0.2, 0.5));
-    let material_left: Metal    	= Metal::new(Color::new(0.8, 0.8, 0.8), 0.3);
+    let material_left: Dielectric   = Dielectric::new(1.5);
     let material_right: Metal 		= Metal::new(Color::new(0.8, 0.6, 0.2), 1.0);
 
 	let mut world: World = World::new();
