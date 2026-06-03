@@ -51,7 +51,7 @@ impl Vec3 {
 		Self::new(rand_range(min, max), rand_range(min, max), rand_range(min, max))
 	}
 
-	fn random_unit() -> Self {
+	pub fn random_unit() -> Self {
 		loop {
 			let vec: Self = Self::random_range(-1.0, 1.0);
 			let lensq: f64 = vec.length_squared();
@@ -156,7 +156,7 @@ impl Ray {
 		}
 
 		if let Some(hit) = world.hit(self, Interval::new(0.001, f64::INFINITY)) {
-			let direction: Vec3 = hit.normal.random_on_hemisphere();
+			let direction: Vec3 = hit.normal + Vec3::random_unit();
 			let ray: Ray = Ray::new(hit.point, direction);
 			return ray.color(world, depth - 1) * 0.5;
 		}
@@ -381,9 +381,12 @@ impl Camera {
 
 	fn write_color(&mut self, color: Color) {
 		let intensity: Interval = Interval::new(0.000, 0.999);
-		self.pixels.push((256.0 * intensity.clamp(color.x)) as u8);
-		self.pixels.push((256.0 * intensity.clamp(color.y)) as u8);
-		self.pixels.push((256.0 * intensity.clamp(color.z)) as u8);
+		let r: f64 = linear_to_gamma(color.x);
+		let g: f64 = linear_to_gamma(color.y);
+		let b: f64 = linear_to_gamma(color.z);
+		self.pixels.push((256.0 * intensity.clamp(r)) as u8);
+		self.pixels.push((256.0 * intensity.clamp(g)) as u8);
+		self.pixels.push((256.0 * intensity.clamp(b)) as u8);
 		self.pixels.push(255u8);
 	}
 }
@@ -410,6 +413,13 @@ fn rand_f64() -> f64 {
 
 fn rand_range(min: f64, max: f64) -> f64 {
     min + (max - min) * rand_f64()
+}
+
+fn linear_to_gamma(linear_component: f64) -> f64 {
+	if linear_component > 0.0 {
+		return linear_component.sqrt();
+	}
+	0.0
 }
 
 #[wasm_bindgen]
