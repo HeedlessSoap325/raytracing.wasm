@@ -150,11 +150,15 @@ impl Ray {
 		self.origin + self.direction * t
 	}
 
-	pub fn color(self, world: &World) -> Color {
+	pub fn color(self, world: &World, depth: u64) -> Color {
+		if depth <= 0 {
+			return Color::zero();
+		}
+
 		if let Some(hit) = world.hit(self, Interval::new(0.0, f64::INFINITY)) {
 			let direction: Vec3 = hit.normal.random_on_hemisphere();
 			let ray: Ray = Ray::new(hit.point, direction);
-			return ray.color(world) * 0.5;
+			return ray.color(world, depth - 1) * 0.5;
 		}
 
 		let unit_direction: Vec3 = self.direction.normalize();
@@ -303,6 +307,7 @@ pub struct Camera {
 	pub image_width: u64,
 	pub image_height: u64,
 	pub samples_per_pixel: u64,
+	pub max_depth: u64,
 	center: Point3,
 	pixel00_loc: Point3,
 	pixel_delta_u: Point3,
@@ -312,8 +317,8 @@ pub struct Camera {
 }
 
 impl Camera {
-	pub fn new(image_width: u64, image_height: u64, samples_per_pixel: u64) -> Self {
-		let mut cam: Self = Self { image_width, image_height, samples_per_pixel, ..Default::default() };
+	pub fn new(image_width: u64, image_height: u64, samples_per_pixel: u64, max_depth: u64) -> Self {
+		let mut cam: Self = Self { image_width, image_height, samples_per_pixel, max_depth, ..Default::default() };
 		cam.initialize();
 		cam
 	}
@@ -324,7 +329,7 @@ impl Camera {
 				let mut pixel_color = Color::zero();
 				for _ in 0..self.samples_per_pixel {
 					let ray: Ray = self.get_ray(i, j);
-					pixel_color = pixel_color + ray.color(world);
+					pixel_color = pixel_color + ray.color(world, self.max_depth);
 				}
 	
 				self.write_color(pixel_color * self.pixel_samples_scale);
@@ -408,7 +413,7 @@ fn rand_range(min: f64, max: f64) -> f64 {
 }
 
 #[wasm_bindgen]
-pub fn render(width: u64, height: u64, samples_per_pixel: u64) -> Vec<u8> {
+pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64) -> Vec<u8> {
 	let mut world: World = World::new();
 	world.add(Box::new(
 		Sphere {
@@ -423,6 +428,6 @@ pub fn render(width: u64, height: u64, samples_per_pixel: u64) -> Vec<u8> {
 		}
 	));
 
-	let mut camera: Camera = Camera::new(width, height, samples_per_pixel);
+	let mut camera: Camera = Camera::new(width, height, samples_per_pixel, max_depth);
 	camera.render(&world)
 }

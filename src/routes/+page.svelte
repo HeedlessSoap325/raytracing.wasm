@@ -10,12 +10,13 @@
 		const width  = 640;
 		const height = 360;
 		const samples_per_pixel = 50;
+		const max_depth = 50;
 
 		canvas!.width  = width;
 		canvas!.height = height;
 
 		const t0 = performance.now();
-		const pixelData = render(BigInt(width), BigInt(height), BigInt(samples_per_pixel));
+		const pixelData = render(BigInt(width), BigInt(height), BigInt(samples_per_pixel), BigInt(max_depth));
 		const t1 = performance.now();
 
 		const imageData = new ImageData(	
