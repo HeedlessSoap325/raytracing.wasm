@@ -1,4 +1,5 @@
 use wasm_bindgen::prelude::*;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Vec3 {
@@ -68,6 +69,15 @@ impl Vec3 {
 		} else {
 			return -on_unit_sphere;
 		}
+	}
+
+	pub fn near_zero(&self) -> bool {
+		let s = 1e-8;
+		(self.x.abs() < s) && (self.y.abs() < s) && (self.z.abs() < s)
+	}
+
+	pub fn reflect(v: Vec3, n: Vec3) -> Self {
+		v - n * v.dot(n) * 2.0
 	}
 }
 
@@ -156,9 +166,14 @@ impl Ray {
 		}
 
 		if let Some(hit) = world.hit(self, Interval::new(0.001, f64::INFINITY)) {
-			let direction: Vec3 = hit.normal + Vec3::random_unit();
-			let ray: Ray = Ray::new(hit.point, direction);
-			return ray.color(world, depth - 1) * 0.5;
+			let mut scattered: Ray = Ray::new(Point3::zero(), Vec3::zero());
+			let mut attenuation: Color = Color::zero();
+
+			if hit.material.clone().scatter(self, hit, &mut attenuation, &mut scattered) {
+				return attenuation * scattered.color(world, depth - 1);
+			}
+
+			return Color::zero();
 		}
 
 		let unit_direction: Vec3 = self.direction.normalize();
@@ -167,12 +182,12 @@ impl Ray {
 	}
 }
 
-#[derive(Clone, Copy)]
 pub struct HitRecord {
     pub point: Point3,
     pub normal: Vec3,
     pub t: f64,
 	pub front_face: bool,
+	pub material: Arc<dyn Material>,
 }
 
 impl HitRecord {
@@ -189,10 +204,10 @@ pub trait Hittable {
 	fn hit(&self, ray: Ray, ray_t: Interval) -> Option<HitRecord>;
 }
 
-#[derive(Copy, Clone)]
 pub struct Sphere {
     pub center: Point3,
     pub radius: f64,
+	pub material: Arc<dyn Material>,
 }
 
 impl Hittable for Sphere {
@@ -222,6 +237,7 @@ impl Hittable for Sphere {
 			point: ray.at(root),
 			normal: (ray.at(root) - self.center) / self.radius,
 			front_face: false,
+			material: Arc::clone(&self.material),
 		};
 
 		let outward_normal: Vec3 = (hit_record.point - self.center) / self.radius;
@@ -262,6 +278,54 @@ impl Hittable for World {
 		}
 
 		rec
+	}
+}
+
+pub trait Material {
+    fn scatter(&self, ray_in: Ray, rec: HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool;
+}
+
+#[derive(Clone, Copy)]
+struct Lambertian {
+    albedo: Vec3,
+}
+
+impl Lambertian {
+	pub fn new(albedo: Color) -> Self {
+		Self { albedo }
+	}
+}
+
+impl Material for Lambertian {
+    fn scatter(&self, ray_in: Ray, rec: HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
+        let _ = ray_in;
+		let mut scatter_direction: Vec3 = rec.normal + Vec3::random_unit();
+		if scatter_direction.near_zero() {
+			scatter_direction = rec.normal;
+		}
+
+		*scattered = Ray::new(rec.point, scatter_direction);
+		*attenuation = self.albedo;
+		true
+    }
+}
+
+pub struct Metal {
+	albedo: Color,
+}
+
+impl Metal {
+	pub fn new(albedo: Color) -> Self {
+		Self { albedo }
+	}
+}
+
+impl Material for Metal {
+	fn scatter(&self, ray_in: Ray, rec: HitRecord, attenuation: &mut Color, scattered: &mut Ray) -> bool {
+		let reflected: Vec3 = Vec3::reflect(ray_in.direction, rec.normal);
+		*scattered = Ray::new(rec.point, reflected);
+		*attenuation = self.albedo;
+		true
 	}
 }
 
@@ -424,17 +488,38 @@ fn linear_to_gamma(linear_component: f64) -> f64 {
 
 #[wasm_bindgen]
 pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64) -> Vec<u8> {
+	let material_ground: Lambertian = Lambertian::new(Color::new(0.8, 0.8, 0.0));
+    let material_center: Lambertian = Lambertian::new(Color::new(0.1, 0.2, 0.5));
+    let material_left: Metal    	= Metal::new(Color::new(0.8, 0.8, 0.8));
+    let material_right: Metal 		= Metal::new(Color::new(0.8, 0.6, 0.2));
+
 	let mut world: World = World::new();
-	world.add(Box::new(
-		Sphere {
-			center: Point3::new(0.0, 0.0, -1.0),
-			radius: 0.5,
-		}
-	));
 	world.add(Box::new(
 		Sphere {
 			center: Point3::new(0.0, -100.5, -1.0),
 			radius: 100.0,
+			material: Arc::new(material_ground),
+		}
+	));
+	world.add(Box::new(
+		Sphere {
+			center: Point3::new(0.0, 0.0, -1.2),
+			radius: 0.5,
+			material: Arc::new(material_center),
+		}
+	));
+	world.add(Box::new(
+		Sphere {
+			center: Point3::new(-1.0, 0.0, -1.0),
+			radius: 0.5,
+			material: Arc::new(material_left),
+		}
+	));
+	world.add(Box::new(
+		Sphere {
+			center: Point3::new(1.0, 0.0, -1.0),
+			radius: 0.5,
+			material: Arc::new(material_right),
 		}
 	));
 
