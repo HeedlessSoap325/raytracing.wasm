@@ -1,7 +1,7 @@
 use crate::vec::{Vec3, Point3, Color};
 use crate::ray::{Ray};
 use crate::objects::{World};
-use crate::utils::{linear_to_gamma, rand_f64, Interval};
+use crate::utils::{Interval, degrees_to_radians, linear_to_gamma, rand_f64};
 
 #[derive(Default)]
 pub struct Camera {
@@ -9,6 +9,7 @@ pub struct Camera {
 	pub image_height: u64,
 	pub samples_per_pixel: u64,
 	pub max_depth: u64,
+	pub vfov: f64,
 	center: Point3,
 	pixel00_loc: Point3,
 	pixel_delta_u: Point3,
@@ -18,13 +19,12 @@ pub struct Camera {
 }
 
 impl Camera {
-	pub fn new(image_width: u64, image_height: u64, samples_per_pixel: u64, max_depth: u64) -> Self {
-		let mut cam: Self = Self { image_width, image_height, samples_per_pixel, max_depth, ..Default::default() };
-		cam.initialize();
-		cam
+	pub fn new() -> Self {
+		Self { image_height: 100, image_width: 200, samples_per_pixel: 10, max_depth: 10, vfov: 90.0, ..Default::default() }
 	}
 
 	pub fn render(&mut self, world: &World) -> Vec<u8> {
+		self.initialize();
 		for j in 0..self.image_height {
 			for i in 0..self.image_width {
 				let mut pixel_color = Color::zero();
@@ -48,7 +48,9 @@ impl Camera {
 		self.pixel_samples_scale = 1.0 / (self.samples_per_pixel as f64);
 
 		let focal_length: f64 = 1.0;
-		let viewport_height: f64 = 2.0;
+		let theta: f64 = degrees_to_radians(self.vfov);
+		let h: f64 = f64::tan(theta / 2.0);
+		let viewport_height: f64 = 2.0 * h * focal_length;
 		let viewport_width: f64 = viewport_height * (self.image_width as f64 / self.image_height as f64);
 
 		// Calculate the vectors across the horizontal and down the vertical viewport edges.

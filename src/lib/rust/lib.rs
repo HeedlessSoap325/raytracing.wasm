@@ -14,11 +14,11 @@ use crate::objects::{World, Sphere};
 use crate::vec::{Color, Point3};
 
 #[wasm_bindgen]
-pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64) -> Vec<u8> {
+pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64, vfov: f64) -> Vec<u8> {
 	let material_ground: Lambertian = Lambertian::new(Color::new(0.8, 0.8, 0.0));
     let material_center: Lambertian = Lambertian::new(Color::new(0.1, 0.2, 0.5));
     let material_left: Dielectric   = Dielectric::new(1.5);
-    let material_bubble: Dielectric   = Dielectric::new(1.0 / 1.5);
+    let material_bubble: Dielectric = Dielectric::new(1.0 / 1.5);
     let material_right: Metal 		= Metal::new(Color::new(0.8, 0.6, 0.2), 1.0);
 
 	let mut world: World = World::new();
@@ -58,6 +58,11 @@ pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64) -
 		}
 	));
 
-	let mut camera: Camera = Camera::new(width, height, samples_per_pixel, max_depth);
+	let mut camera: Camera = Camera::new();
+	camera.image_width = width;
+	camera.image_height = height;
+	camera.samples_per_pixel = samples_per_pixel;
+	camera.max_depth = max_depth;
+	camera.vfov = vfov;
 	camera.render(&world)
 }
