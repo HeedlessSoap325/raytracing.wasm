@@ -53,11 +53,14 @@ impl Vec3 {
 	}
 
 	pub fn random_unit() -> Self {
+		// Use the Marsaglia method directly on the unit sphere
 		loop {
-			let vec: Self = Self::random_range(-1.0, 1.0);
-			let lensq: f64 = vec.length_squared();
-			if (1e-160 < lensq) && (lensq <= 1.0) {
-				return vec / lensq.sqrt();
+			let u = rand_f64() * 2.0 - 1.0;
+			let v = rand_f64() * 2.0 - 1.0;
+			let s = u * u + v * v;
+			if s < 1.0 {
+				let f = 2.0 * (1.0 - s).sqrt();
+				return Self::new(u * f, v * f, 1.0 - 2.0 * s);
 			}
 		}
 	}
