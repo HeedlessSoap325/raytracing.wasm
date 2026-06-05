@@ -1,6 +1,5 @@
 <script lang="ts">
-	import init, { render } from "$rust/lib";
-    import { onMount } from "svelte";
+	import {renderParallel} from "$lib/ts/raytracer";
 
 	let canvas: HTMLCanvasElement | undefined = $state(undefined);
 	let ms = $state(0);
@@ -17,7 +16,7 @@
 		canvas!.height = height;
 
 		const t0 = performance.now();
-		const pixelData = render(BigInt(width), BigInt(height), BigInt(samples_per_pixel), BigInt(max_depth), vfov);
+		const pixelData = await renderParallel(width, height, samples_per_pixel, max_depth, vfov);
 		const t1 = performance.now();
 
 		const imageData = new ImageData(	
@@ -29,11 +28,6 @@
 		ctx!.putImageData(imageData, 0, 0);
 		ms = t1 - t0;
 	}
-
-	onMount(async () => {
-		await init();
-	
-	});
 </script>
 
 <canvas bind:this={canvas}></canvas>

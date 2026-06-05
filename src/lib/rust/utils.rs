@@ -42,7 +42,7 @@ pub fn degrees_to_radians(degrees: f64) -> f64 {
 }
 
 thread_local! {
-    static RNG: Cell<u32> = Cell::new(12345);
+    pub static RNG: Cell<u32> = Cell::new(12345);
 }
 
 pub fn rand_f64() -> f64 {

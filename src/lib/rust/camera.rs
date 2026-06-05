@@ -23,9 +23,9 @@ impl Camera {
 		Self { image_height: 100, image_width: 200, samples_per_pixel: 10, max_depth: 10, vfov: 90.0, ..Default::default() }
 	}
 
-	pub fn render(&mut self, world: &World) -> Vec<u8> {
-		self.initialize();
-		for j in 0..self.image_height {
+	pub fn render_band(&mut self, world: &World, row_start: u64, row_end: u64) -> Vec<u8> {
+		self.initialize(row_start, row_end);
+		for j in row_start..row_end {
 			for i in 0..self.image_width {
 				let mut pixel_color = Color::zero();
 				for _ in 0..self.samples_per_pixel {
@@ -40,8 +40,8 @@ impl Camera {
 		std::mem::take(&mut self.pixels)
 	}
 
-	fn initialize(&mut self) {
-		self.pixels = Vec::with_capacity((self.image_width * self.image_height * 4) as usize);
+	fn initialize(&mut self, band_start: u64, band_end: u64) {
+		self.pixels = Vec::with_capacity((self.image_width * (band_end - band_start) * 4) as usize);
 
 		self.center = Point3::zero();
 

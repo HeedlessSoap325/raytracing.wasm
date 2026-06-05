@@ -11,10 +11,13 @@ use std::sync::Arc;
 use crate::camera::{Camera};
 use crate::materials::{Lambertian, Dielectric, Metal};
 use crate::objects::{World, Sphere};
+use crate::utils::RNG;
 use crate::vec::{Color, Point3};
 
 #[wasm_bindgen]
-pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64, vfov: f64) -> Vec<u8> {
+pub fn render_band(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64, vfov: f64, row_start: u64, row_end: u64, seed: u32) -> Vec<u8> {
+	RNG.with(|r| r.set(seed)); // seed the thread-local RNG with the provided seed
+	
 	let material_ground: Lambertian = Lambertian::new(Color::new(0.8, 0.8, 0.0));
     let material_center: Lambertian = Lambertian::new(Color::new(0.1, 0.2, 0.5));
     let material_left: Dielectric   = Dielectric::new(1.5);
@@ -64,5 +67,5 @@ pub fn render(width: u64, height: u64, samples_per_pixel: u64, max_depth: u64, v
 	camera.samples_per_pixel = samples_per_pixel;
 	camera.max_depth = max_depth;
 	camera.vfov = vfov;
-	camera.render(&world)
+	camera.render_band(&world, row_start, row_end)
 }
